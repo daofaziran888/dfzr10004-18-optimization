@@ -55,6 +55,97 @@
       </tbody>
     </table>
 
+    <section class="panel">
+      <h3>重试协同清单</h3>
+      <p class="panel-desc">
+        重试规则清单与待等待清单同步登记，所有采集计划共享同一份冷却判断；冷却结束的节点需先通过一次健康校验。
+      </p>
+      <div class="page-actions">
+        <button class="btn" type="button" @click="loadCoordination">刷新协同清单</button>
+      </div>
+
+      <h4>重试规则冷却口径</h4>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>规则编号</th>
+            <th>异常类型</th>
+            <th>冷却秒数</th>
+            <th>重试上限</th>
+            <th>退避策略</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="rule in coordination.重试规则清单" :key="String(rule.规则编号)">
+            <td>{{ rule.规则编号 }}</td>
+            <td>{{ rule.异常类型 }}</td>
+            <td>{{ rule.冷却秒数 }}</td>
+            <td>{{ rule.重试上限 }}</td>
+            <td>{{ rule.退避策略 }}</td>
+          </tr>
+          <tr v-if="!coordination.重试规则清单.length">
+            <td colspan="5" class="empty-state">暂无已启用的重试规则</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>共享冷却判断</h4>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>节点编号</th>
+            <th>服务站点</th>
+            <th>状态</th>
+            <th>剩余冷却(秒)</th>
+            <th>冷却结束时间</th>
+            <th>最近失败时间</th>
+            <th>最近异常类型</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="node in coordination.共享冷却判断" :key="String(node.节点编号)">
+            <td>{{ node.节点编号 }}</td>
+            <td>{{ node.服务站点 ?? '—' }}</td>
+            <td>{{ node.状态 }}</td>
+            <td>{{ node.剩余冷却秒数 }}</td>
+            <td>{{ node.冷却结束时间 ?? '—' }}</td>
+            <td>{{ node.最近失败时间 ?? '—' }}</td>
+            <td>{{ node.最近异常类型 ?? '—' }}</td>
+          </tr>
+          <tr v-if="!coordination.共享冷却判断.length">
+            <td colspan="7" class="empty-state">暂无代理节点</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>待等待清单</h4>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>位次</th>
+            <th>计划编号</th>
+            <th>目标站点</th>
+            <th>优先级</th>
+            <th>预计等待(秒)</th>
+            <th>排队原因</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in coordination.待等待清单" :key="String(item.计划编号)">
+            <td>{{ item.排队位次 }}</td>
+            <td>{{ item.计划编号 }}</td>
+            <td>{{ item.目标站点 }}</td>
+            <td>{{ item.优先级 }}</td>
+            <td>{{ item.预计等待秒数 ?? '待释放' }}</td>
+            <td>{{ item.排队原因 }}</td>
+          </tr>
+          <tr v-if="!coordination.待等待清单.length">
+            <td colspan="6" class="empty-state">当前没有排队计划</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条异常重试管理记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -81,6 +172,28 @@ const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 
+type Coordination = {
+  重试规则清单: Row[]
+  共享冷却判断: Row[]
+  待等待清单: Row[]
+}
+
+const coordination = ref<Coordination>({ 重试规则清单: [], 共享冷却判断: [], 待等待清单: [] })
+
+async function loadCoordination() {
+  try {
+    const response = await request(`${ENDPOINT}/coordination`)
+    const payload = await response.json()
+    coordination.value = {
+      重试规则清单: payload.重试规则清单 ?? [],
+      共享冷却判断: payload.共享冷却判断 ?? [],
+      待等待清单: payload.待等待清单 ?? [],
+    }
+  } catch {
+    coordination.value = { 重试规则清单: [], 共享冷却判断: [], 待等待清单: [] }
+  }
+}
+
 function resetFilters() {
   filters.value = {}
   void reload()
@@ -99,10 +212,11 @@ async function runAction(action: string, row: Row) {
   try {
     const response = await request(`${ENDPOINT}/${row.id}/actions`, {
       method: 'POST',
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ values: { action } }),
     })
-    if (!response.ok) {
-      throw new Error('异常重试管理动作未生效，请稍后重试')
+    const payload = await response.json()
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || '异常重试管理动作未生效，请稍后重试')
     }
     await reload()
   } catch (error) {
@@ -126,5 +240,8 @@ async function reload() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  void reload()
+  void loadCoordination()
+})
 </script>

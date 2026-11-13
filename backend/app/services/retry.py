@@ -7,6 +7,8 @@ from app.store import store
 
 MODULE = "retry"
 REQUIRED_FIELDS = ["规则编号", "异常类型", "重试上限"]
+# 冷却时间会进入代理调度裁决，登记时必须一并保留，不能只留必填字段。
+OPTIONAL_FIELDS = ["退避策略", "冷却时间", "告警阈值", "降级方案", "是否启用"]
 STATUS_ORDER = ["草稿", "待校验", "已启用", "已停用"]
 ACTION_RULES = {"提交校验": "待校验", "启用规则": "已启用", "停用规则": "已停用"}
 NEGATIVE_ACTIONS = ["停用规则"]
@@ -39,7 +41,9 @@ class RetryService:
             return None, missing
         rows = store.rows(MODULE)
         entry = {"id": max((int(row.get("id", 0)) for row in rows), default=0) + 1}
-        entry.update({field: values.get(field) for field in REQUIRED_FIELDS})
+        for field in REQUIRED_FIELDS + OPTIONAL_FIELDS:
+            if values.get(field) is not None:
+                entry[field] = values.get(field)
         entry["status"] = STATUS_ORDER[0]
         entry["pending"] = True
         entry["abnormal"] = False

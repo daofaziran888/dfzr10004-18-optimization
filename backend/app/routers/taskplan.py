@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.services.scheduler import scheduler
 from app.services.taskplan import TaskplanService
 
 router = APIRouter(prefix="/api/taskplan", tags=["采集任务编排"])
@@ -14,6 +15,12 @@ service = TaskplanService()
 
 LIST_FIELDS = ["计划编号", "目标站点", "采集频率", "数据范围", "优先级", "资源配额", "预计用时", "计划状态"]
 STATUSES = ["草稿", "运行中", "已暂停", "已完成"]
+
+
+@router.get("/todo")
+def todo_queue() -> dict[str, Any]:
+    """计划待办队列：跟着代理裁决结果重排，只读。"""
+    return scheduler.todo_queue()
 
 
 @router.get("", response_model=PageResult[dict])

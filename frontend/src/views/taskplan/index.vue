@@ -55,6 +55,43 @@
       </tbody>
     </table>
 
+    <section class="panel">
+      <h3>计划待办队列</h3>
+      <p class="panel-desc">
+        待办队列跟着代理调度裁决重排：在租执行、可立即执行、排队中、等待冷却共用同一份冷却判断。
+      </p>
+      <div class="page-actions">
+        <button class="btn" type="button" @click="loadTodo">刷新待办队列</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>计划编号</th>
+            <th>目标站点</th>
+            <th>优先级</th>
+            <th>调度状态</th>
+            <th>建议节点</th>
+            <th>预计等待(秒)</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in todoItems" :key="String(item.计划编号)">
+            <td>{{ item.计划编号 }}</td>
+            <td>{{ item.目标站点 }}</td>
+            <td>{{ item.优先级 }}</td>
+            <td>{{ item.调度状态 }}</td>
+            <td>{{ item.建议节点 ?? '—' }}</td>
+            <td>{{ item.预计等待秒数 ?? '待释放' }}</td>
+            <td>{{ item.说明 }}</td>
+          </tr>
+          <tr v-if="!todoItems.length">
+            <td colspan="7" class="empty-state">暂无待办计划</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条采集任务编排记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -81,6 +118,18 @@ const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
 
+const todoItems = ref<Row[]>([])
+
+async function loadTodo() {
+  try {
+    const response = await request(`${ENDPOINT}/todo`)
+    const payload = await response.json()
+    todoItems.value = payload.items ?? []
+  } catch {
+    todoItems.value = []
+  }
+}
+
 function resetFilters() {
   filters.value = {}
   void reload()
@@ -99,10 +148,11 @@ async function runAction(action: string, row: Row) {
   try {
     const response = await request(`${ENDPOINT}/${row.id}/actions`, {
       method: 'POST',
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ values: { action } }),
     })
-    if (!response.ok) {
-      throw new Error('采集任务编排动作未生效，请稍后重试')
+    const payload = await response.json()
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || '采集任务编排动作未生效，请稍后重试')
     }
     await reload()
   } catch (error) {
@@ -126,5 +176,8 @@ async function reload() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  void reload()
+  void loadTodo()
+})
 </script>

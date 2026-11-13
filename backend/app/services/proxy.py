@@ -7,6 +7,8 @@ from app.store import store
 
 MODULE = "proxy"
 REQUIRED_FIELDS = ["节点编号", "代理地址", "代理类型"]
+# 服务站点、归属负责人、响应延迟、可用率都会进入调度裁决，登记时必须一并保留。
+OPTIONAL_FIELDS = ["地理位置", "响应延迟", "可用率", "切换策略", "节点状态", "服务站点", "归属负责人"]
 STATUS_ORDER = ["草稿", "待校验", "已启用", "已停用"]
 ACTION_RULES = {"提交校验": "待校验", "启用节点": "已启用", "停用节点": "已停用"}
 NEGATIVE_ACTIONS = ["停用节点"]
@@ -39,7 +41,9 @@ class ProxyService:
             return None, missing
         rows = store.rows(MODULE)
         entry = {"id": max((int(row.get("id", 0)) for row in rows), default=0) + 1}
-        entry.update({field: values.get(field) for field in REQUIRED_FIELDS})
+        for field in REQUIRED_FIELDS + OPTIONAL_FIELDS:
+            if values.get(field) is not None:
+                entry[field] = values.get(field)
         entry["status"] = STATUS_ORDER[0]
         entry["pending"] = True
         entry["abnormal"] = False

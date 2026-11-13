@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
 from app.services.retry import RetryService
+from app.services.scheduler import scheduler
 
 router = APIRouter(prefix="/api/retry", tags=["异常重试管理"])
 
@@ -14,6 +15,12 @@ service = RetryService()
 
 LIST_FIELDS = ["规则编号", "异常类型", "重试上限", "退避策略", "冷却时间", "告警阈值", "降级方案", "是否启用"]
 STATUSES = ["草稿", "待校验", "已启用", "已停用"]
+
+
+@router.get("/coordination")
+def coordination() -> dict[str, Any]:
+    """协同清单：重试规则清单、共享冷却判断与待等待清单一并登记，只读。"""
+    return scheduler.coordination()
 
 
 @router.get("", response_model=PageResult[dict])
